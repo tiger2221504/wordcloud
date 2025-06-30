@@ -18,7 +18,10 @@ def tokenize_japanese(text, selected_pos, exclude_words=None):
     ])
     return words
 
-def generate_wordcloud(text, width, height, background_color, font_path, selected_pos, exclude_words=None, max_words=50, collocations=False):
+def generate_wordcloud(text, width, height, background_color, font_path, selected_pos, exclude_words=None, max_words=50, collocations=False, min_font_size):
+    horizontal = 0.5
+    if collocations:
+        horizontal = 1.0
     words = tokenize_japanese(text, selected_pos, exclude_words)
     wordcloud = WordCloud(
         font_path=font_path,
@@ -26,7 +29,9 @@ def generate_wordcloud(text, width, height, background_color, font_path, selecte
         height=height,
         background_color=background_color,
         max_words=max_words,
-        collocations=collocations
+        min_font_size=min_font_size,
+        collocations=collocations,
+        prefer_horizontal=horizontal
     ).generate(words)
     return wordcloud
 
@@ -86,9 +91,18 @@ collocations = st.checkbox(
     value=False
 )
 
+# 最小フォントサイズ
+min_font_size = st.slider(
+    "最小フォントサイズ",
+    min_value=1,
+    max_value=300,
+    value=10,
+    step=1
+)
+
 # ワードクラウド画像の幅入力
 width = st.number_input(
-    "ワードクラウドの幅（ピクセル）",
+    "ワードクラウドの幅",
     min_value=100,
     max_value=4000,
     value=1920,
@@ -97,7 +111,7 @@ width = st.number_input(
 
 # ワードクラウド画像の高さ入力
 height = st.number_input(
-    "ワードクラウドの高さ（ピクセル）",
+    "ワードクラウドの高さ",
     min_value=100,
     max_value=4000,
     value=1080,
@@ -125,7 +139,7 @@ else:
                 try:
                     wordcloud = generate_wordcloud(
                         user_input, width, height, background_color,
-                        font_path, selected_pos, exclude_words, max_words, collocations
+                        font_path, selected_pos, exclude_words, max_words, collocations, min_font_size
                     )
 
                     # ワードクラウドの描画
