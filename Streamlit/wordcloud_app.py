@@ -5,17 +5,6 @@ from wordcloud import WordCloud  # ワードクラウド生成
 import matplotlib.pyplot as plt  # ワードクラウドの描画
 
 def tokenize_japanese(text, selected_pos, exclude_words=None):
-    """
-    日本語テキストを形態素解析し、選択した品詞のみを含む単語の文字列を返す。
-
-    Args:
-        text (str): 解析対象の日本語テキスト。
-        selected_pos (list): 含める品詞のリスト。
-        exclude_words (list, optional): 除外する単語のリスト。
-
-    Returns:
-        str: スペースで区切られた単語の文字列。
-    """
     tokenizer = Tokenizer()
     tokens = tokenizer.tokenize(text)
     if exclude_words is None:
@@ -24,32 +13,19 @@ def tokenize_japanese(text, selected_pos, exclude_words=None):
         token.base_form
         for token in tokens
         if token.part_of_speech.split(',')[0] in selected_pos
-        and token.base_form not in exclude_words
+        and token.base_form not in exclude_words and len(token.base_form) > 1
     ])
     return words
 
-def generate_wordcloud(text, width, height, background_color, font_path, selected_pos, exclude_words=None):
-    """
-    トークン化された日本語テキストからワードクラウドを生成する。
-
-    Args:
-        text (str): ワードクラウド生成元の日本語テキスト。
-        width (int): ワードクラウド画像の幅。
-        height (int): ワードクラウド画像の高さ。
-        background_color (str): ワードクラウドの背景色。
-        font_path (str): フォントファイルへのパス。
-        selected_pos (list): 含める品詞のリスト。
-        exclude_words (list, optional): 除外する単語のリスト。
-
-    Returns:
-        WordCloud: 生成されたWordCloudオブジェクト。
-    """
+def generate_wordcloud(text, width, height, background_color, font_path, selected_pos, exclude_words=None, max_words=50, collocations=false):
     words = tokenize_japanese(text, selected_pos, exclude_words)
     wordcloud = WordCloud(
         font_path=font_path,
         width=width,
         height=height,
-        background_color=background_color
+        background_color=background_color,
+        max_words=max_words,
+        collocations=collocations
     ).generate(words)
     return wordcloud
 
@@ -71,6 +47,13 @@ exclude_input = st.text_input(
 
 # 除外単語をリストに変換
 exclude_words = [word.strip() for word in exclude_input.split(',') if word.strip()]
+words = ' '.join([
+    token.base_form
+    for token in tokens
+    if token.part_of_speech.split(',')[0] in selected_pos
+    and token.base_form not in exclude_words
+    and len(token.base_form) > 1  # 1文字単語を除外
+])
 
 # 品詞のオプション
 pos_options = [
@@ -92,6 +75,21 @@ selected_pos = st.multiselect(
     "ワードクラウドに含める品詞を選択してください",
     options=pos_options,
     default=['名詞']  # デフォルト選択
+)
+
+# 表示する単語数の上限
+max_words = st.slider(
+    "表示する最大単語数",
+    min_value=5,
+    max_value=1000,
+    value=50,
+    step=1
+)
+
+# テキストの重なり
+collocations = st.checkbox(
+    "単語の重なりを許可する",
+    value=False
 )
 
 # ワードクラウド画像の幅入力
@@ -133,7 +131,7 @@ else:
                 try:
                     wordcloud = generate_wordcloud(
                         user_input, width, height, background_color,
-                        font_path, selected_pos, exclude_words
+                        font_path, selected_pos, exclude_words, max_words, collocations
                     )
 
                     # ワードクラウドの描画
