@@ -13,7 +13,8 @@ def tokenize_japanese(text, selected_pos, exclude_words=None):
         token.base_form
         for token in tokens
         if token.part_of_speech.split(',')[0] in selected_pos
-        and token.base_form not in exclude_words and len(token.base_form) > 1
+        and token.base_form not in exclude_words
+        and len(token.base_form) > 1
     ])
     return words
 
@@ -47,13 +48,6 @@ exclude_input = st.text_input(
 
 # 除外単語をリストに変換
 exclude_words = [word.strip() for word in exclude_input.split(',') if word.strip()]
-words = ' '.join([
-    token.base_form
-    for token in tokens
-    if token.part_of_speech.split(',')[0] in selected_pos
-    and token.base_form not in exclude_words
-    and len(token.base_form) > 1  # 1文字単語を除外
-])
 
 # 品詞のオプション
 pos_options = [
