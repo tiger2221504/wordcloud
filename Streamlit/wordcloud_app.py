@@ -124,7 +124,7 @@ background_color = st.color_picker("背景色を選択してください", "#f4f
 
 # フォントファイルのパス指定
 # font_path = "./Streamlit/NotoSansJP-VariableFont_wght.ttf" # Noto Sans JP Thin
-font_path = "./Streamlit/GenSekiGothic2JP-B" # 源石ゴシックB
+font_path = "./Streamlit/GenSekiGothic2JP-B.otf" # 源石ゴシックB
 
 
 # フォントファイルの存在確認
