@@ -86,10 +86,10 @@ max_words = st.slider(
     step=1
 )
 
-# テキストの重なり
+# 横書きのみ
 collocations = st.checkbox(
-    "単語の重なりを許可する",
-    value=False
+    "横書きのみ",
+    value=True
 )
 
 # 最小フォントサイズ
