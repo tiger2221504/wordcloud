@@ -123,7 +123,7 @@ height = st.number_input(
 background_color = st.color_picker("背景色を選択してください", "#f4f5f7")
 
 # フォントファイルのパス指定
-font_path = "./Streamlit/NotoSansJP-VariableFont_wght.ttf" # Noto Sans JP Thin
+# font_path = "./Streamlit/NotoSansJP-VariableFont_wght.ttf" # Noto Sans JP Thin
 font_path = "./Streamlit/GenSekiGothic2JP-B" # 源石ゴシックB
 
 
