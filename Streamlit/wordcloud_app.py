@@ -152,7 +152,7 @@ else:
                     st.pyplot(fig)
                     # ワードクラウド画像をバイナリに変換してダウンロード用に保存
                     buf = io.BytesIO()
-                    fig.savefig(buf, format="jpg", bbox_inches='tight')
+                    fig.savefig(buf, format="png", bbox_inches='tight')
                     buf.seek(0)
                     
                     # ダウンロードボタンを表示
