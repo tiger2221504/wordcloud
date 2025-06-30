@@ -5,6 +5,18 @@ from janome.tokenizer import Tokenizer
 from wordcloud import WordCloud
 import matplotlib.pyplot as plt
 
+#ページコンフィグ
+st.set_page_config(
+     page_title="ワードクラウドジェネレーター",
+     page_icon="☁️",
+     initial_sidebar_state="collapsed",
+     menu_items={
+         'About': """
+         ワードクラウドの作成ができます(日本語対応)
+         """
+     }
+ )
+
 def tokenize_japanese(text, selected_pos, exclude_words=None):
     tokenizer = Tokenizer()
     tokens = tokenizer.tokenize(text)
@@ -39,7 +51,7 @@ def generate_wordcloud(text, width, height, background_color, font_path, selecte
 # =================================================================
 
 # Streamlitアプリのタイトル
-st.title("ワードクラウドジェネレーター")
+st.title("ワードクラウドジェネレーター☁️")
 
 # ユーザーからのテキスト入力
 user_input = st.text_area(
