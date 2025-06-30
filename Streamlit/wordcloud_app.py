@@ -1,8 +1,9 @@
-import os  # フォントファイルの存在確認に使用
-import streamlit as st  # Webアプリフレームワーク
-from janome.tokenizer import Tokenizer  # 日本語テキストの形態素解析
-from wordcloud import WordCloud  # ワードクラウド生成
-import matplotlib.pyplot as plt  # ワードクラウドの描画
+import os
+import io
+import streamlit as st
+from janome.tokenizer import Tokenizer
+from wordcloud import WordCloud
+import matplotlib.pyplot as plt
 
 def tokenize_japanese(text, selected_pos, exclude_words=None):
     tokenizer = Tokenizer()
@@ -149,6 +150,19 @@ else:
 
                     # Streamlit上にワードクラウドを表示
                     st.pyplot(fig)
+                    # ワードクラウド画像をバイナリに変換してダウンロード用に保存
+                    buf = io.BytesIO()
+                    fig.savefig(buf, format="jpg", bbox_inches='tight')
+                    buf.seek(0)
+                    
+                    # ダウンロードボタンを表示
+                    st.download_button(
+                        label="画像をダウンロード",
+                        data=buf,
+                        file_name="wordcloud.png",
+                        mime="image/png"
+                    )
+                    
                 except Exception as e:
                     st.error(f"エラーが発生しました: {e}")
         else:
