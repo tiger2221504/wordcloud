@@ -81,7 +81,7 @@ selected_pos = st.multiselect(
 max_words = st.slider(
     "表示する最大単語数",
     min_value=5,
-    max_value=1000,
+    max_value=200,
     value=50,
     step=1
 )
@@ -96,7 +96,7 @@ collocations = st.checkbox(
 min_font_size = st.slider(
     "最小フォントサイズ",
     min_value=1,
-    max_value=300,
+    max_value=100,
     value=10,
     step=1
 )
