@@ -18,7 +18,7 @@ def tokenize_japanese(text, selected_pos, exclude_words=None):
     ])
     return words
 
-def generate_wordcloud(text, width, height, background_color, font_path, selected_pos, exclude_words=None, max_words=50, collocations=False, min_font_size):
+def generate_wordcloud(text, width, height, background_color, font_path, selected_pos, exclude_words=None, max_words=50, collocations=False, min_font_size=10):
     horizontal = 0.5
     if collocations:
         horizontal = 1.0
