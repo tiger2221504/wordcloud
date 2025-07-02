@@ -99,12 +99,6 @@ max_words = st.number_input(
     step=1
 )
 
-# 横書きのみ
-collocations = st.checkbox(
-    "横書きのみ",
-    value=True
-)
-
 # 最小フォントサイズ
 min_font_size = st.number_input(
     "最小フォントサイズ",
@@ -132,11 +126,29 @@ height = st.number_input(
     step=1
 )
 
+# 横書きのみ
+collocations = st.checkbox(
+    "横書きのみ",
+    value=True
+)
+
 # 背景色の選択
 background_color = st.color_picker("背景色を選択してください", "#f4f5f7")
 
 # カラーマップの選択
-colormap = "summer"
+colormaps_list = [
+    "summer",
+    "Accent", "afmhot", "autumn", "binary", "bone", "BrBG", "bwr", "cividis", "cool", "coolwarm",
+    "copper", "cubehelix", "Dark2", "flag", "gist_earth", "gist_gray", "gist_heat", "gist_ncar",
+    "gist_rainbow", "gist_stern", "gist_yarg", "gnuplot", "gnuplot2", "gray", "Greens", "Greys",
+    "hot", "hsv", "inferno", "jet", "magma", "nipy_spectral", "ocean", "Oranges", "OrRd", "Paired",
+    "Pastel1", "Pastel2", "pink", "PiYG", "plasma", "PRGn", "PuBu", "PuBuGn", "PuOr", "PuRd", "Purples",
+    "rainbow", "RdBu", "RdGy", "RdPu", "RdYlBu", "RdYlGn", "Reds", "seismic", "Set1", "Set2", "Set3",
+    "spectral", "spring", "tab10", "tab20", "tab20b", "tab20c", "terrain", "turbo", "twilight",
+    "twilight_shifted", "viridis", "Wistia", "YlGn", "YlGnBu", "YlOrBr", "YlOrRd"
+]
+colormap = st.selectbox(
+    'カラーマップを選択してください', colormaps_list)
 
 # フォントファイルのパス指定
 # font_path = "./Streamlit/NotoSansJP-VariableFont_wght.ttf" # Noto Sans JP Thin
