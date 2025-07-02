@@ -91,7 +91,7 @@ selected_pos = st.multiselect(
 )
 
 # 表示する単語数の上限
-max_words = st.slider(
+max_words = st.number_input(
     "表示する最大単語数",
     min_value=5,
     max_value=200,
@@ -106,7 +106,7 @@ collocations = st.checkbox(
 )
 
 # 最小フォントサイズ
-min_font_size = st.slider(
+min_font_size = st.number_input(
     "最小フォントサイズ",
     min_value=1,
     max_value=100,
@@ -135,6 +135,9 @@ height = st.number_input(
 # 背景色の選択
 background_color = st.color_picker("背景色を選択してください", "#f4f5f7")
 
+# カラーマップの選択
+colormap = "summer"
+
 # フォントファイルのパス指定
 # font_path = "./Streamlit/NotoSansJP-VariableFont_wght.ttf" # Noto Sans JP Thin
 font_path = "./Streamlit/GenSekiGothic2JP-B.otf" # 源石ゴシックB
@@ -154,8 +157,17 @@ else:
             else:
                 try:
                     wordcloud = generate_wordcloud(
-                        user_input, width, height, background_color,
-                        font_path, selected_pos, exclude_words, max_words, collocations, min_font_size
+                        user_input, 
+                         width, 
+                         height, 
+                         background_color,
+                         font_path, 
+                         selected_pos, 
+                         exclude_words, 
+                         max_words, 
+                         collocations, 
+                         min_font_size, 
+                         colormap
                     )
 
                     # ワードクラウドの描画
