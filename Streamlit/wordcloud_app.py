@@ -137,15 +137,15 @@ background_color = st.color_picker("背景色を選択", "#f4f5f7")
 
 # カラーマップの選択
 colormaps_list = [
-    "summer",
-    "Accent", "afmhot", "autumn", "binary", "bone", "BrBG", "bwr", "cividis", "cool", "coolwarm",
+    "viridis","cividis",  "inferno", "magma", "plasma", "summer",
+    "Accent", "afmhot", "autumn", "binary", "bone", "BrBG", "bwr", "cool", "coolwarm",
     "copper", "cubehelix", "Dark2", "flag", "gist_earth", "gist_gray", "gist_heat", "gist_ncar",
     "gist_rainbow", "gist_stern", "gist_yarg", "gnuplot", "gnuplot2", "gray", "Greens", "Greys",
-    "hot", "hsv", "inferno", "jet", "magma", "nipy_spectral", "ocean", "Oranges", "OrRd", "Paired",
-    "Pastel1", "Pastel2", "pink", "PiYG", "plasma", "PRGn", "PuBu", "PuBuGn", "PuOr", "PuRd", "Purples",
+    "hot", "hsv", "jet", "nipy_spectral", "ocean", "Oranges", "OrRd", "Paired",
+    "Pastel1", "Pastel2", "pink", "PiYG", "PRGn", "PuBu", "PuBuGn", "PuOr", "PuRd", "Purples",
     "rainbow", "RdBu", "RdGy", "RdPu", "RdYlBu", "RdYlGn", "Reds", "seismic", "Set1", "Set2", "Set3",
     "spectral", "spring", "tab10", "tab20", "tab20b", "tab20c", "terrain", "turbo", "twilight",
-    "twilight_shifted", "viridis", "Wistia", "YlGn", "YlGnBu", "YlOrBr", "YlOrRd"
+    "twilight_shifted", "Wistia", "YlGn", "YlGnBu", "YlOrBr", "YlOrRd"
 ]
 colormap = st.selectbox('カラーマップを選択', colormaps_list)
 
