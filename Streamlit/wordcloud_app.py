@@ -133,7 +133,7 @@ collocations = st.checkbox(
 )
 
 # 背景色の選択
-background_color = st.color_picker("背景色を選択してください", "#f4f5f7")
+background_color = st.color_picker("背景色を選択", "#f4f5f7")
 
 # カラーマップの選択
 colormaps_list = [
@@ -147,8 +147,7 @@ colormaps_list = [
     "spectral", "spring", "tab10", "tab20", "tab20b", "tab20c", "terrain", "turbo", "twilight",
     "twilight_shifted", "viridis", "Wistia", "YlGn", "YlGnBu", "YlOrBr", "YlOrRd"
 ]
-colormap = st.selectbox(
-    'カラーマップを選択してください', colormaps_list)
+colormap = st.selectbox('カラーマップを選択', colormaps_list)
 
 # フォントファイルのパス指定
 # font_path = "./Streamlit/NotoSansJP-VariableFont_wght.ttf" # Noto Sans JP Thin
