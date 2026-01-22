@@ -106,6 +106,9 @@ def generate_wordcloud(
 
     words = tokenize_japanese(text, selected_pos, exclude_words, priority_nouns)
 
+    # デバッグ用出力
+    print("トークナイズ後の単語列:", words)
+
     wordcloud = WordCloud(
         font_path=font_path,
         width=width,
