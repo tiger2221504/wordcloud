@@ -17,25 +17,90 @@ st.set_page_config(
      }
  )
 
-def tokenize_japanese(text, selected_pos, exclude_words=None):
+def apply_priority_nouns(text, priority_nouns):
+    """
+    priority_nouns に指定された語を最優先で1語として扱うため、
+    文字列中の該当箇所をプレースホルダに置換してからJanomeに渡す。
+    """
+
+    if not priority_nouns:
+        return text, {}
+
+    # 重複除去 + 長い語を先に（部分一致の事故を減らす）
+    uniq = sorted(set([w for w in priority_nouns if w]), key=len, reverse=True)
+    if not uniq:
+        return text, {}
+
+    word_to_ph = {}
+    ph_to_word = {}
+    for i, w in enumerate(uniq):
+        ph = f"__PRIORITY_NOUN_{i}__"
+        word_to_ph[w] = ph
+        ph_to_word[ph] = w
+
+    pattern = re.compile("|".join(map(re.escape, uniq)))
+
+    def repl(m):
+        w = m.group(0)
+        ph = word_to_ph[w]
+        # 前後に空白を入れてトークンとして分離しやすくする
+        return f" {ph} "
+
+    replaced = pattern.sub(repl, text)
+    return replaced, ph_to_word
+
+def tokenize_japanese(text, selected_pos, exclude_words=None, priority_nouns=None):
     tokenizer = Tokenizer()
-    tokens = tokenizer.tokenize(text)
+
     if exclude_words is None:
         exclude_words = []
-    words = ' '.join([
-        token.base_form
-        for token in tokens
-        if token.part_of_speech.split(',')[0] in selected_pos
-        and token.base_form not in exclude_words
-        and len(token.base_form) > 1
-    ])
-    return words
+    if priority_nouns is None:
+        priority_nouns = []
 
-def generate_wordcloud(text, width, height, background_color, font_path, selected_pos, exclude_words=None, max_words=50, collocations=False, min_font_size=10, colormap=None):
+    # 名詞リストを最優先で1語化
+    text_for_tokenize, ph_to_word = apply_priority_nouns(text, priority_nouns)
+
+    tokens = tokenizer.tokenize(text_for_tokenize)
+
+    words = []
+    for token in tokens:
+        surface = token.surface
+
+        # 置換したプレースホルダは「名詞」として扱う
+        if surface in ph_to_word:
+            word = ph_to_word[surface]
+            pos_major = '名詞'
+        else:
+            # Janomeのbase_formが'*'の場合はsurfaceを使う
+            base = token.base_form
+            word = base if base != '*' else surface
+            pos_major = token.part_of_speech.split(',')[0]
+
+        if pos_major in selected_pos and word not in exclude_words and len(word) > 1:
+            words.append(word)
+
+    return ' '.join(words)
+
+def generate_wordcloud(
+    text,
+    width,
+    height,
+    background_color,
+    font_path,
+    selected_pos,
+    exclude_words=None,
+    priority_nouns=None,
+    max_words=50,
+    collocations=False,
+    min_font_size=10,
+    colormap=None
+):
     horizontal = 0.5
     if collocations:
         horizontal = 1.0
-    words = tokenize_japanese(text, selected_pos, exclude_words)
+
+    words = tokenize_japanese(text, selected_pos, exclude_words, priority_nouns)
+
     wordcloud = WordCloud(
         font_path=font_path,
         width=width,
@@ -47,6 +112,7 @@ def generate_wordcloud(text, width, height, background_color, font_path, selecte
         colormap=colormap,
         prefer_horizontal=horizontal
     ).generate(words)
+
     return wordcloud
 
 # =================================================================
@@ -58,6 +124,13 @@ st.title("ワードクラウドジェネレーター☁️")
 user_input = st.text_area(
     "テキストを入力してください"
 )
+
+# 名詞リスト
+priority_nouns_input = st.text_input(
+    "名詞として優先したい単語を入力してください（カンマ区切り）",
+    value=""
+)
+priority_nouns = [w.strip() for w in priority_nouns_input.split(',') if w.strip()]
 
 # 除外する単語の入力
 exclude_input = st.text_input(
@@ -175,10 +248,11 @@ else:
                          font_path, 
                          selected_pos, 
                          exclude_words, 
-                         max_words, 
-                         collocations, 
-                         min_font_size, 
-                         colormap
+                         priority_nouns=priority_nouns,
+                         max_words=max_words, 
+                         collocations=collocations, 
+                         min_font_size=min_font_size, 
+                         colormap=colormap
                     )
 
                     # ワードクラウドの描画
