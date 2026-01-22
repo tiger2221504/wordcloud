@@ -2,3 +2,4 @@ streamlit
 janome
 wordcloud
 matplotlib
+streamlit-cookies-manager
