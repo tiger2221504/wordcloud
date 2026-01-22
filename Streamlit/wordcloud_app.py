@@ -31,6 +31,7 @@ st.set_page_config(
 st.session_state.setdefault("last_png", None)
 st.session_state.setdefault("last_config", None)
 st.session_state.setdefault("confirm_action", None)
+st.session_state.setdefault("wc_seed", None)
 
 # =========================================================
 # Cookieで内容保存
@@ -90,6 +91,29 @@ def delete_history_item(item_id: str):
 def reset_history():
     cookies[HISTORY_COOKIE_KEY] = json.dumps([], ensure_ascii=False)
     cookies.save()
+
+
+# =========================================================
+# 復元用関数
+# =========================================================
+def apply_config_to_inputs(cfg: dict):
+    st.session_state["wc_text"] = cfg.get("text", "")
+    st.session_state["wc_priority_nouns_input"] = cfg.get("priority_nouns_input", "")
+    st.session_state["wc_exclude_input"] = cfg.get("exclude_input", "")
+    st.session_state["wc_selected_pos"] = cfg.get("selected_pos", ["名詞"])
+    st.session_state["wc_max_words"] = int(cfg.get("max_words", 50))
+    st.session_state["wc_min_font_size"] = int(cfg.get("min_font_size", 10))
+    st.session_state["wc_width"] = int(cfg.get("width", 800))
+    st.session_state["wc_height"] = int(cfg.get("height", 600))
+    st.session_state["wc_collocations"] = bool(cfg.get("collocations", True))
+    st.session_state["wc_background_color"] = cfg.get("background_color", "#f4f5f7")
+    st.session_state["wc_colormap"] = cfg.get("colormap", "viridis")
+    st.session_state["wc_seed"] = cfg.get("seed")
+
+    # 直前の生成結果を消す場合↓
+    st.session_state["last_png"] = None
+    st.session_state["last_config"] = None
+
 
 
 # =========================================================
@@ -222,20 +246,23 @@ st.title("ワードクラウドジェネレーター☁️")
 
 # ユーザーからのテキスト入力
 user_input = st.text_area(
-    "テキストを入力してください"
+    "テキストを入力してください",
+    key="wc_text"
 )
 
 # 名詞リスト
 priority_nouns_input = st.text_input(
     "名詞として優先したい単語を入力してください（カンマ区切り）",
-    value=""
+    value="",
+    key="wc_priority_nouns_input"
 )
 priority_nouns = [w.strip() for w in priority_nouns_input.split(',') if w.strip()]
 
 # 除外する単語の入力
 exclude_input = st.text_input(
     "除外する単語を入力してください（カンマ区切り）",
-    value="的, こと, もの, それ, これ, ため, よう, そこ, どこ, とき, あと, みたい, ような"
+    value="的, こと, もの, それ, これ, ため, よう, そこ, どこ, とき, あと, みたい, ような",
+    key="wc_exclude_input"
 )
 
 # 除外単語をリストに変換
@@ -260,7 +287,8 @@ pos_options = [
 selected_pos = st.multiselect(
     "ワードクラウドに含める品詞を選択してください",
     options=pos_options,
-    default=['名詞']  # デフォルト選択
+    default=['名詞'],  # デフォルト選択
+    key="wc_selected_pos"
 )
 
 # 表示する単語数の上限
@@ -269,7 +297,8 @@ max_words = st.number_input(
     min_value=5,
     max_value=200,
     value=50,
-    step=1
+    step=1,
+    key="wc_max_words"
 )
 
 # 最小フォントサイズ
@@ -278,7 +307,8 @@ min_font_size = st.number_input(
     min_value=1,
     max_value=100,
     value=10,
-    step=1
+    step=1,
+    key="wc_min_font_size"
 )
 
 # ワードクラウド画像の幅入力
@@ -287,7 +317,8 @@ width = st.number_input(
     min_value=100,
     max_value=4000,
     value=800,
-    step=1
+    step=1,
+    key="wc_width"
 )
 
 # ワードクラウド画像の高さ入力
@@ -296,17 +327,22 @@ height = st.number_input(
     min_value=100,
     max_value=4000,
     value=600,
-    step=1
+    step=1,
+    key="wc_height"
 )
 
 # 横書きのみ
 collocations = st.checkbox(
     "横書きのみ",
-    value=True
+    value=True,
+    key="wc_collocations"
 )
 
 # 背景色の選択
-background_color = st.color_picker("背景色を選択", "#f4f5f7")
+background_color = st.color_picker(
+    "背景色を選択", "#f4f5f7",
+    key="wc_background_color"
+)
 
 # カラーマップの選択
 colormaps_list = [
@@ -320,7 +356,11 @@ colormaps_list = [
     "spectral", "spring", "tab10", "tab20", "tab20b", "tab20c", "terrain", "turbo", "twilight",
     "twilight_shifted", "Wistia", "YlGn", "YlGnBu", "YlOrBr", "YlOrRd"
 ]
-colormap = st.selectbox('カラーマップを選択', colormaps_list)
+colormap = st.selectbox(
+    'カラーマップを選択',
+    colormaps_list,
+    key="wc_colormap"
+)
 
 # フォントファイルのパス指定
 # font_path = "./Streamlit/NotoSansJP-VariableFont_wght.ttf" # Noto Sans JP Thin
@@ -340,7 +380,10 @@ else:
                 st.error("少なくとも1つの品詞を選択してください。")
             else:
                 try:
-                    seed = secrets.randbelow(2**31 - 1)  # ランダムシード
+                    seed = st.session_state.get("wc_seed")
+                    if seed is None:
+                        seed = secrets.randbelow(2**31 - 1)
+                    st.session_state["wc_seed"] = seed
                     wordcloud = generate_wordcloud(
                         user_input, 
                          width, 
@@ -415,27 +458,27 @@ else:
 
 
 # =========================================================
-# 下部UI：保存した画像
+# 下部UI：保存した設定
 # =========================================================
 st.divider()
-st.caption("保存した画像（ブラウザcookieに保存）")
+st.caption("保存した設定（ブラウザcookieに保存）")
 
-with st.expander("保存した画像", expanded=False):
+with st.expander("保存した設定", expanded=False):
     history = load_history()
 
     # リセット確認フロー
-    if st.button("履歴のリセット", type="secondary"):
+    if st.button("保存のリセット", type="secondary"):
         st.session_state.confirm_action = {"type": "reset"}
         st.rerun()
 
     if st.session_state.confirm_action and st.session_state.confirm_action.get("type") == "reset":
-        st.warning("履歴をリセットしますか？")
+        st.warning("保存した設定をリセットしますか？")
         rc1, rc2 = st.columns([1, 1])
         with rc1:
-            if st.button("はい、リセットします", key="confirm_reset_yes"):
+            if st.button("リセットする", key="confirm_reset_yes"):
                 reset_history()
                 st.session_state.confirm_action = None
-                st.success("履歴をリセットしました")
+                st.success("保存をリセットしました")
                 st.rerun()
         with rc2:
             if st.button("キャンセル", key="confirm_reset_no"):
@@ -451,51 +494,17 @@ with st.expander("保存した画像", expanded=False):
             created_at = item.get("created_at", "")
             cfg = (item.get("config") or {})
 
-            # 画像を再現（seedで同一画像）
-            try:
-                text = cfg.get("text", "")
-                priority_nouns_input2 = cfg.get("priority_nouns_input", "")
-                exclude_input2 = cfg.get("exclude_input", "")
-                selected_pos2 = cfg.get("selected_pos", ["名詞"])
-                max_words2 = int(cfg.get("max_words", 50))
-                min_font_size2 = int(cfg.get("min_font_size", 10))
-                width2 = int(cfg.get("width", 800))
-                height2 = int(cfg.get("height", 600))
-                collocations2 = bool(cfg.get("collocations", True))
-                background_color2 = cfg.get("background_color", "#f4f5f7")
-                colormap2 = cfg.get("colormap", "viridis")
-                seed2 = int(cfg.get("seed", 0))
-
-                priority_nouns2 = [w.strip() for w in priority_nouns_input2.split(",") if w.strip()]
-                exclude_words2 = [w.strip() for w in exclude_input2.split(",") if w.strip()]
-
-                wc = generate_wordcloud(
-                    text,
-                    width2,
-                    height2,
-                    background_color2,
-                    font_path,
-                    selected_pos2,
-                    exclude_words2,
-                    priority_nouns=priority_nouns2,
-                    max_words=max_words2,
-                    collocations=collocations2,
-                    min_font_size=min_font_size2,
-                    colormap=colormap2,
-                    random_state=seed2,
-                )
-                png = render_wordcloud_to_png_bytes(wc)
-            except Exception as e:
-                png = None
-                st.error(f"履歴画像の再現に失敗しました: {e}")
-
-            # 控えめなカード
             with st.container(border=True):
-                top1, top2 = st.columns([4, 1])
+                top1, top2, top3 = st.columns([4, 1, 1])
                 with top1:
                     st.caption(f"保存日時: {created_at}")
+
                 with top2:
-                    # 個別削除クリック → 確認状態へ
+                    if st.button("読み込み", key=f"load_{item_id}"):
+                        apply_config_to_inputs(cfg)
+                        st.rerun()
+
+                with top3:
                     if st.button("削除", key=f"delete_{item_id}"):
                         st.session_state.confirm_action = {"type": "delete", "id": item_id}
                         st.rerun()
@@ -509,7 +518,7 @@ with st.expander("保存した画像", expanded=False):
                     st.warning("この履歴を削除しますか？（元に戻せません）")
                     dc1, dc2 = st.columns([1, 1])
                     with dc1:
-                        if st.button("はい、削除します", key=f"confirm_delete_yes_{item_id}"):
+                        if st.button("削除する", key=f"confirm_delete_yes_{item_id}"):
                             try:
                                 delete_history_item(item_id)
                                 st.session_state.confirm_action = None
@@ -521,6 +530,3 @@ with st.expander("保存した画像", expanded=False):
                         if st.button("キャンセル", key=f"confirm_delete_no_{item_id}"):
                             st.session_state.confirm_action = None
                             st.rerun()
-
-                if png:
-                    st.image(png, use_container_width=True)
