@@ -5,15 +5,15 @@ import json
 import uuid
 import secrets
 from datetime import datetime, timezone, timedelta
-
 import streamlit as st
 from janome.tokenizer import Tokenizer
 from wordcloud import WordCloud
 import matplotlib.pyplot as plt
-
 from streamlit_cookies_manager import EncryptedCookieManager
 
+# =========================================================
 #ページコンフィグ
+# =========================================================
 st.set_page_config(
      page_title="ワードクラウドジェネレーター",
      page_icon="☁️",
@@ -25,6 +25,12 @@ st.set_page_config(
      }
  )
 
+# =========================================================
+# 先に初期化
+# =========================================================
+st.session_state.setdefault("last_png", None)
+st.session_state.setdefault("last_config", None)
+st.session_state.setdefault("confirm_action", None)
 
 # =========================================================
 # Cookieで内容保存
@@ -376,13 +382,13 @@ else:
                     st.error(f"エラーが発生しました: {e}")
 
     # ダウンロード＋保存ボタンを横並び(生成後のみ)
-    if st.session_state.last_png and st.session_state.last_config:
+    if st.session_state.get("last_png") and st.session_state.get("last_config"):
         c1, c2 = st.columns([1, 1])
 
         with c1:
             st.download_button(
                 label="画像をダウンロード",
-                data=st.session_state.last_png,
+                data=st.session_state.get("last_png"),
                 file_name="wordcloud.png",
                 mime="image/png",
             )
