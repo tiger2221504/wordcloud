@@ -1,5 +1,6 @@
 import os
 import io
+import re
 import streamlit as st
 from janome.tokenizer import Tokenizer
 from wordcloud import WordCloud
