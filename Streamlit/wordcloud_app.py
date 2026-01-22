@@ -20,22 +20,27 @@ st.set_page_config(
 
 def apply_priority_nouns(text, priority_nouns):
     """
-    priority_nouns に指定された語を最優先で1語として扱うため、
+    priority_nounsを最優先で1語として扱うため、
     文字列中の該当箇所をプレースホルダに置換してからJanomeに渡す。
     """
 
     if not priority_nouns:
         return text, {}
 
-    # 重複除去 + 長い語を先に（部分一致の事故を減らす）
     uniq = sorted(set([w for w in priority_nouns if w]), key=len, reverse=True)
     if not uniq:
         return text, {}
 
+    # BMP Private Use Area: U+E000 .. U+F8FF (6400文字)
+    PUA_START = 0xE000
+    PUA_END = 0xF8FF
+    if len(uniq) > (PUA_END - PUA_START + 1):
+        raise ValueError("priority_nouns が多すぎます（最大6400語まで）")
+
     word_to_ph = {}
     ph_to_word = {}
     for i, w in enumerate(uniq):
-        ph = f"__PRIORITY_NOUN_{i}__"
+        ph = chr(PUA_START + i)  # 1文字プレースホルダ
         word_to_ph[w] = ph
         ph_to_word[ph] = w
 
@@ -44,8 +49,7 @@ def apply_priority_nouns(text, priority_nouns):
     def repl(m):
         w = m.group(0)
         ph = word_to_ph[w]
-        # 前後に空白を入れてトークンとして分離しやすくする
-        return f" {ph} "
+        return f" {ph} "  # 空白で分離
 
     replaced = pattern.sub(repl, text)
     return replaced, ph_to_word
