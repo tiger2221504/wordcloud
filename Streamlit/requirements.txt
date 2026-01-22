@@ -2,4 +2,3 @@ streamlit
 janome
 wordcloud
 matplotlib
-re
