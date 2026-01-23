@@ -66,6 +66,8 @@ div.stButton > button[kind="primary"]:hover{
 st.session_state.setdefault("last_png", None)
 st.session_state.setdefault("last_settings", None) # 保存用（設定のみ）
 st.session_state.setdefault("flash", None) # 簡易メッセージ
+st.session_state.setdefault("pending_load_settings", None)
+st.session_state.setdefault("pending_load_name", None)
 
 # =========================================================
 # Cookieで内容保存
@@ -149,7 +151,7 @@ def make_default_name(history) -> str:
 
 
 # =========================================================
-# Dialogs（st.dialog がある場合だけ）
+# Dialogs
 # =========================================================
 HAS_DIALOG = hasattr(st, "dialog")
 
@@ -205,6 +207,47 @@ if HAS_DIALOG:
 
         if c2.button("キャンセル", key="dlg_reset_cancel"):
             st.rerun()
+
+
+
+# =========================================================
+# 読み込み予約があれば、ウィジェット生成前に反映
+# =========================================================
+pending = st.session_state.get("pending_load_settings")
+if pending:
+    # 安全に取り出し（次のrunで二重適用しない）
+    settings = pending
+    st.session_state["pending_load_settings"] = None
+
+    # 値を反映
+    st.session_state["wc_priority_nouns_input"] = settings.get("priority_nouns_input", "")
+    st.session_state["wc_exclude_input"] = settings.get("exclude_input", "")
+
+    loaded_pos = settings.get("selected_pos", ["名詞"])
+    if not isinstance(loaded_pos, list):
+        loaded_pos = ["名詞"]
+    st.session_state["wc_selected_pos"] = loaded_pos
+
+    def _to_int(x, default):
+        try:
+            return int(x)
+        except Exception:
+            return default
+
+    st.session_state["wc_max_words"] = _to_int(settings.get("max_words", 50), 50)
+    st.session_state["wc_min_font_size"] = _to_int(settings.get("min_font_size", 10), 10)
+    st.session_state["wc_width"] = _to_int(settings.get("width", 800), 800)
+    st.session_state["wc_height"] = _to_int(settings.get("height", 600), 600)
+    st.session_state["wc_collocations"] = bool(settings.get("collocations", True))
+    st.session_state["wc_background_color"] = settings.get("background_color", "#f4f5f7")
+    st.session_state["wc_colormap"] = settings.get("colormap", "viridis")
+
+    st.session_state["last_png"] = None
+    st.session_state["last_settings"] = None
+
+    nm = st.session_state.get("pending_load_name") or "設定"
+    st.session_state["pending_load_name"] = None
+    st.session_state["flash"] = f"「{nm}」を読み込みました"
 
 
 
@@ -582,19 +625,8 @@ with st.expander("保存した設定", expanded=False):
 
                 with b1:
                     if st.button("読み込み", key=f"load_{item_id}"):
-                        st.session_state["wc_priority_nouns_input"] = settings.get("priority_nouns_input", "")
-                        st.session_state["wc_exclude_input"] = settings.get("exclude_input", "")
-                        st.session_state["wc_selected_pos"] = settings.get("selected_pos", ["名詞"])
-                        st.session_state["wc_max_words"] = int(settings.get("max_words", 50))
-                        st.session_state["wc_min_font_size"] = int(settings.get("min_font_size", 10))
-                        st.session_state["wc_width"] = int(settings.get("width", 800))
-                        st.session_state["wc_height"] = int(settings.get("height", 600))
-                        st.session_state["wc_collocations"] = bool(settings.get("collocations", True))
-                        st.session_state["wc_background_color"] = settings.get("background_color", "#f4f5f7")
-                        st.session_state["wc_colormap"] = settings.get("colormap", "viridis")
-
-                        st.session_state["last_png"] = None
-                        st.session_state["last_settings"] = None
+                        st.session_state["pending_load_settings"] = settings
+                        st.session_state["pending_load_name"] = name
                         st.rerun()
 
                 with b2:
