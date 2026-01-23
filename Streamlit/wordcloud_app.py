@@ -194,7 +194,7 @@ if HAS_DIALOG:
 
     @st.dialog("リセットの確認")
     def reset_dialog():
-        st.write("保存した設定を **すべてリセット** しますか？（元に戻せません）")
+        st.write("保存した設定を**すべてリセット**しますか？（元に戻せません）")
         c1, c2 = st.columns(2)
 
         if c1.button("リセットする", key="dlg_reset_ok"):
