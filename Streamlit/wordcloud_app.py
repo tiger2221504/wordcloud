@@ -10,6 +10,7 @@ from janome.tokenizer import Tokenizer
 from wordcloud import WordCloud
 import matplotlib.pyplot as plt
 from streamlit_cookies_manager import EncryptedCookieManager
+import streamlit.components.v1 as components
 
 # =========================================================
 #ページコンフィグ
@@ -25,13 +26,46 @@ st.set_page_config(
      }
  )
 
+
+
+# =========================================================
+# ボタン色のカスタマイズ（DL/保存だけ）
+# - 「入力内容を保存」は type="primary" にしてCSSで色変更
+# - それ以外のボタンはデフォルト（secondary相当）にして影響を最小化
+# =========================================================
+st.markdown(
+    """
+<style>
+/* ダウンロードボタン */
+div[data-testid="stDownloadButton"] button {
+  background: #E8F4FF !important;
+  color: #0B3D6E !important;
+  border: 1px solid #B8DAFF !important;
+}
+div[data-testid="stDownloadButton"] button:hover {
+  background: #D9EDFF !important;
+}
+
+/* 「入力内容を保存」(primaryボタン) */
+div.stButton > button[kind="primary"]{
+  background: #E9FFF1 !important;
+  color: #0B5A2A !important;
+  border: 1px solid #BFEACC !important;
+}
+div.stButton > button[kind="primary"]:hover{
+  background: #DBFFEA !important;
+}
+</style>
+""",
+    unsafe_allow_html=True,
+)
+
 # =========================================================
 # 先に初期化
 # =========================================================
 st.session_state.setdefault("last_png", None)
-st.session_state.setdefault("last_config", None)
-st.session_state.setdefault("confirm_action", None)
-st.session_state.setdefault("wc_seed", None)
+st.session_state.setdefault("last_settings", None) # 保存用（設定のみ）
+st.session_state.setdefault("flash", None) # 簡易メッセージ
 
 # =========================================================
 # Cookieで内容保存
@@ -44,7 +78,6 @@ COOKIE_PASSWORD = os.getenv("WORDCLOUD_COOKIE_PASSWORD", "change-me-please")
 
 cookies = EncryptedCookieManager(prefix="wordcloud_", password=COOKIE_PASSWORD)
 if not cookies.ready():
-    # cookieが準備できるまで待つ
     st.stop()
 
 
@@ -88,31 +121,168 @@ def delete_history_item(item_id: str):
     save_history(new_history)
 
 
+def rename_history_item(item_id: str, new_name: str):
+    history = load_history()
+    for item in history:
+        if item.get("id") == item_id:
+            item["name"] = new_name
+            break
+    save_history(history)
+
+
 def reset_history():
     cookies[HISTORY_COOKIE_KEY] = json.dumps([], ensure_ascii=False)
     cookies.save()
 
 
-# =========================================================
-# 復元用関数
-# =========================================================
-def apply_config_to_inputs(cfg: dict):
-    st.session_state["wc_text"] = cfg.get("text", "")
-    st.session_state["wc_priority_nouns_input"] = cfg.get("priority_nouns_input", "")
-    st.session_state["wc_exclude_input"] = cfg.get("exclude_input", "")
-    st.session_state["wc_selected_pos"] = cfg.get("selected_pos", ["名詞"])
-    st.session_state["wc_max_words"] = int(cfg.get("max_words", 50))
-    st.session_state["wc_min_font_size"] = int(cfg.get("min_font_size", 10))
-    st.session_state["wc_width"] = int(cfg.get("width", 800))
-    st.session_state["wc_height"] = int(cfg.get("height", 600))
-    st.session_state["wc_collocations"] = bool(cfg.get("collocations", True))
-    st.session_state["wc_background_color"] = cfg.get("background_color", "#f4f5f7")
-    st.session_state["wc_colormap"] = cfg.get("colormap", "viridis")
-    st.session_state["wc_seed"] = cfg.get("seed")
+def make_default_name(history) -> str:
+    # 既存の番号を見て、最大値+1を設定
+    nums = []
+    for item in history:
+        name = item.get("name", "")
+        m = re.fullmatch(r"保存した設定(\d+)", name)
+        if m:
+            nums.append(int(m.group(1)))
+    n = (max(nums) + 1) if nums else 1
+    return f"保存した設定{n}"
 
-    # 直前の生成結果を消す場合↓
-    st.session_state["last_png"] = None
-    st.session_state["last_config"] = None
+
+
+# =========================================================
+# クエリパラメータ（HTMLポップアップ結果の受け渡し）ヘルパー
+# =========================================================
+def _get_qp(key: str):
+    if hasattr(st, "query_params"):
+        v = st.query_params.get(key)
+        if isinstance(v, list):
+            return v[0] if v else None
+        return v
+    else:
+        v = st.experimental_get_query_params().get(key)
+        return v[0] if v else None
+
+
+def _set_qp(**kwargs):
+    if hasattr(st, "query_params"):
+        st.query_params.clear()
+        for k, v in kwargs.items():
+            if v is not None:
+                st.query_params[k] = str(v)
+    else:
+        st.experimental_set_query_params(**{k: v for k, v in kwargs.items() if v is not None})
+
+
+def _clear_qp():
+    if hasattr(st, "query_params"):
+        st.query_params.clear()
+    else:
+        st.experimental_set_query_params()
+
+
+
+# =========================================================
+# HTML(JS)ポップアップ（prompt/confirm）
+# =========================================================
+def show_rename_popup(item_id: str, current_name: str):
+    # promptで入力 → action=rename_apply に遷移
+    html = f"""
+<script>
+(() => {{
+  const itemId = {json.dumps(item_id)};
+  const currentName = {json.dumps(current_name)};
+  const newName = window.prompt("保存名を編集", currentName);
+
+  const u = new URL(window.location.href);
+  if (newName === null) {{
+    // キャンセル：クエリ消して戻る
+    u.search = "";
+    window.location.replace(u.toString());
+    return;
+  }}
+
+  const trimmed = newName.trim();
+  if (!trimmed) {{
+    // 空なら変更なし（戻る）
+    u.search = "";
+    window.location.replace(u.toString());
+    return;
+  }}
+
+  u.searchParams.set("action", "rename_apply");
+  u.searchParams.set("id", itemId);
+  u.searchParams.set("name", trimmed);
+  window.location.replace(u.toString());
+}})();
+</script>
+"""
+    components.html(html, height=0)
+
+
+def show_delete_confirm(item_id: str):
+    # confirmで最終確認 → action=delete_apply に遷移
+    html = f"""
+<script>
+(() => {{
+  const itemId = {json.dumps(item_id)};
+  const ok = window.confirm("この保存設定を削除しますか？（元に戻せません）");
+
+  const u = new URL(window.location.href);
+  if (!ok) {{
+    // キャンセル：クエリ消して戻る
+    u.search = "";
+    window.location.replace(u.toString());
+    return;
+  }}
+
+  u.searchParams.set("action", "delete_apply");
+  u.searchParams.set("id", itemId);
+  window.location.replace(u.toString());
+}})();
+</script>
+"""
+    components.html(html, height=0)
+
+
+
+# =========================================================
+# 先にアクション処理（rename/delete）
+# =========================================================
+action = _get_qp("action")
+target_id = _get_qp("id")
+
+if action == "rename_apply" and target_id:
+    new_name = _get_qp("name") or ""
+    new_name = new_name.strip()
+    if new_name:
+        try:
+            rename_history_item(target_id, new_name)
+            st.session_state["flash"] = "保存名を更新しました"
+        except Exception as e:
+            st.session_state["flash"] = f"保存名の更新に失敗しました: {e}"
+    _clear_qp()
+    st.rerun()
+
+if action == "delete_apply" and target_id:
+    try:
+        delete_history_item(target_id)
+        st.session_state["flash"] = "削除しました"
+    except Exception as e:
+        st.session_state["flash"] = f"削除に失敗しました: {e}"
+    _clear_qp()
+    st.rerun()
+
+if action == "rename_popup" and target_id:
+    # 現在名を取って prompt の初期値にする
+    history = load_history()
+    item = next((x for x in history if x.get("id") == target_id), None)
+    if item:
+        show_rename_popup(target_id, item.get("name", ""))
+    else:
+        _clear_qp()
+        st.rerun()
+
+if action == "delete_popup" and target_id:
+    show_delete_confirm(target_id)
 
 
 
@@ -157,11 +327,8 @@ def apply_priority_nouns(text, priority_nouns):
 
 def tokenize_japanese(text, selected_pos, exclude_words=None, priority_nouns=None):
     tokenizer = Tokenizer()
-
-    if exclude_words is None:
-        exclude_words = []
-    if priority_nouns is None:
-        priority_nouns = []
+    exclude_words = exclude_words or []
+    priority_nouns = priority_nouns or []
 
     # 名詞リストを最優先で1語化
     text_for_tokenize, ph_to_word = apply_priority_nouns(text, priority_nouns)
@@ -200,12 +367,8 @@ def generate_wordcloud(
     collocations=False,
     min_font_size=10,
     colormap=None,
-    random_state=None
 ):
-    horizontal = 0.5
-    if collocations:
-        horizontal = 1.0
-
+    horizontal = 1.0 if collocations else 0.5
     words = tokenize_japanese(text, selected_pos, exclude_words, priority_nouns)
 
     # デバッグ用出力
@@ -221,7 +384,6 @@ def generate_wordcloud(
         collocations=collocations,
         colormap=colormap,
         prefer_horizontal=horizontal,
-        random_state=random_state,
     ).generate(words)
 
     return wordcloud
@@ -375,56 +537,54 @@ if not os.path.exists(font_path):
 else:
     # ワードクラウド生成ボタンがクリックされたとき
     if st.button("ワードクラウドを生成"):
-        if user_input:
-            if not selected_pos:
-                st.error("少なくとも1つの品詞を選択してください。")
-            else:
-                try:
-                    seed = st.session_state.get("wc_seed")
-                    if seed is None:
-                        seed = secrets.randbelow(2**31 - 1)
-                    st.session_state["wc_seed"] = seed
-                    wordcloud = generate_wordcloud(
-                        user_input, 
-                         width, 
-                         height, 
-                         background_color,
-                         font_path, 
-                         selected_pos, 
-                         exclude_words, 
-                         priority_nouns=priority_nouns,
-                         max_words=max_words, 
-                         collocations=collocations, 
-                         min_font_size=min_font_size, 
-                         colormap=colormap,
-                         random_state=seed,
-                    )
+        if not user_input:
+            st.error("ワードクラウドを生成するテキストを入力してください。")
+        elif not selected_pos:
+            st.error("少なくとも1つの品詞を選択してください。")
+        else:
+            try:
+                seed = st.session_state.get("wc_seed")
+                if seed is None:
+                    seed = secrets.randbelow(2**31 - 1)
+                st.session_state["wc_seed"] = seed
+                wordcloud = generate_wordcloud(
+                    user_input, 
+                    width, 
+                    height, 
+                    background_color,
+                    font_path, 
+                    selected_pos, 
+                    exclude_words, 
+                    priority_nouns=priority_nouns,
+                    max_words=max_words, 
+                    collocations=collocations, 
+                    min_font_size=min_font_size, 
+                    colormap=colormap,
+                )
 
-                    png_bytes = render_wordcloud_to_png_bytes(wordcloud)
-                    st.session_state.last_png = png_bytes
+                png_bytes = render_wordcloud_to_png_bytes(wordcloud)
+                st.session_state.last_png = png_bytes
 
-                    # 保存用に「入力＋設定＋seed」を保持
-                    st.session_state.last_config = {
-                        "text": user_input,
-                        "priority_nouns_input": priority_nouns_input,
-                        "exclude_input": exclude_input,
-                        "selected_pos": list(selected_pos),
-                        "max_words": int(max_words),
-                        "min_font_size": int(min_font_size),
-                        "width": int(width),
-                        "height": int(height),
-                        "collocations": bool(collocations),
-                        "background_color": background_color,
-                        "colormap": colormap,
-                        "seed": int(seed),
-                    }
+                # 保存用に設定を保持
+                st.session_state.last_config = {
+                    "priority_nouns_input": priority_nouns_input,
+                    "exclude_input": exclude_input,
+                    "selected_pos": list(selected_pos),
+                    "max_words": int(max_words),
+                    "min_font_size": int(min_font_size),
+                    "width": int(width),
+                    "height": int(height),
+                    "collocations": bool(collocations),
+                    "background_color": background_color,
+                    "colormap": colormap,
+                }
 
-                    st.image(png_bytes)
+                st.image(png_bytes)
 
-                except Exception as e:
-                    st.error(f"エラーが発生しました: {e}")
+            except Exception as e:
+                st.error(f"エラーが発生しました: {e}")
 
-    # ダウンロード＋保存ボタンを横並び(生成後のみ)
+    # 画像生成後だけ表示
     if st.session_state.get("last_png") and st.session_state.get("last_config"):
         c1, c2 = st.columns([1, 1])
 
@@ -437,21 +597,22 @@ else:
             )
 
         with c2:
-            if st.button("入力内容を保存"):
+            if st.button("入力内容を保存", type="primary"):
                 try:
                     history = load_history()
+                    default_name = make_default_name(history)
 
                     item = {
                         "id": str(uuid.uuid4()),
                         "created_at": _now_iso_jst(),
-                        "config": st.session_state.last_config,  # seed含む
+                        "name": default_name,
+                        "settings": st.session_state["last_settings"],  # ★ 設定のみ
                     }
                     history.append(item)
-                    # 古い順に間引き
                     history = history[-MAX_HISTORY:]
                     save_history(history)
 
-                    st.success("入力内容を保存しました（cookieに保存）")
+                    st.session_state["flash"] = "設定を保存しました（cookieに保存）"
                     st.rerun()
                 except Exception as e:
                     st.error(f"保存に失敗しました: {e}")
@@ -466,24 +627,37 @@ st.caption("保存した設定（ブラウザcookieに保存）")
 with st.expander("保存した設定", expanded=False):
     history = load_history()
 
-    # リセット確認フロー
-    if st.button("保存のリセット", type="secondary"):
-        st.session_state.confirm_action = {"type": "reset"}
+    # リセット（最終確認をHTML confirm にする）
+    if st.button("履歴のリセット", type="secondary"):
+        # HTML confirm を使うため、delete_popup と同じ要領で query params を使う
+        _set_qp(action="reset_popup")
         st.rerun()
 
-    if st.session_state.confirm_action and st.session_state.confirm_action.get("type") == "reset":
-        st.warning("保存した設定をリセットしますか？")
-        rc1, rc2 = st.columns([1, 1])
-        with rc1:
-            if st.button("リセットする", key="confirm_reset_yes"):
-                reset_history()
-                st.session_state.confirm_action = None
-                st.success("保存をリセットしました")
-                st.rerun()
-        with rc2:
-            if st.button("キャンセル", key="confirm_reset_no"):
-                st.session_state.confirm_action = None
-                st.rerun()
+    # reset_popup を処理（confirm）
+    if _get_qp("action") == "reset_popup":
+        html = """
+<script>
+(() => {
+  const ok = window.confirm("保存した設定をすべてリセットしますか？（元に戻せません）");
+  const u = new URL(window.location.href);
+  u.searchParams.delete("action");
+  if (ok) {
+    u.searchParams.set("action", "reset_apply");
+  }
+  window.location.replace(u.toString());
+})();
+</script>
+"""
+        components.html(html, height=0)
+
+    if _get_qp("action") == "reset_apply":
+        try:
+            reset_history()
+            st.session_state["flash"] = "保存をリセットしました"
+        except Exception as e:
+            st.session_state["flash"] = f"リセットに失敗しました: {e}"
+        _clear_qp()
+        st.rerun()
 
     if not history:
         st.caption("保存履歴はまだありません。")
@@ -492,41 +666,44 @@ with st.expander("保存した設定", expanded=False):
         for item in reversed(history):
             item_id = item.get("id")
             created_at = item.get("created_at", "")
-            cfg = (item.get("config") or {})
+            name = item.get("name", "（無名）")
+            settings = item.get("settings", {}) or {}
 
             with st.container(border=True):
-                top1, top2, top3 = st.columns([4, 1, 1])
-                with top1:
-                    st.caption(f"保存日時: {created_at}")
+                st.markdown(f"**{name}**")
+                st.caption(f"保存日時: {created_at}")
 
-                with top2:
+                st.caption(
+                    f"{settings.get('width','?')}×{settings.get('height','?')} / "
+                    f"max_words={settings.get('max_words','?')} / "
+                    f"min_font={settings.get('min_font_size','?')}"
+                )
+
+                b1, b2, b3 = st.columns([1, 1, 3])
+
+                with b1:
                     if st.button("読み込み", key=f"load_{item_id}"):
-                        apply_config_to_inputs(cfg)
+                        st.session_state["wc_priority_nouns_input"] = settings.get("priority_nouns_input", "")
+                        st.session_state["wc_exclude_input"] = settings.get("exclude_input", "")
+                        st.session_state["wc_selected_pos"] = settings.get("selected_pos", ["名詞"])
+                        st.session_state["wc_max_words"] = int(settings.get("max_words", 50))
+                        st.session_state["wc_min_font_size"] = int(settings.get("min_font_size", 10))
+                        st.session_state["wc_width"] = int(settings.get("width", 800))
+                        st.session_state["wc_height"] = int(settings.get("height", 600))
+                        st.session_state["wc_collocations"] = bool(settings.get("collocations", True))
+                        st.session_state["wc_background_color"] = settings.get("background_color", "#f4f5f7")
+                        st.session_state["wc_colormap"] = settings.get("colormap", "viridis")
+
+                        st.session_state["last_png"] = None
+                        st.session_state["last_settings"] = None
                         st.rerun()
 
-                with top3:
+                with b2:
+                    if st.button("名前を編集", key=f"rename_{item_id}"):
+                        _set_qp(action="rename_popup", id=item_id)
+                        st.rerun()
+
+                with b3:
                     if st.button("削除", key=f"delete_{item_id}"):
-                        st.session_state.confirm_action = {"type": "delete", "id": item_id}
+                        _set_qp(action="delete_popup", id=item_id)
                         st.rerun()
-
-                # 削除確認
-                if (
-                    st.session_state.confirm_action
-                    and st.session_state.confirm_action.get("type") == "delete"
-                    and st.session_state.confirm_action.get("id") == item_id
-                ):
-                    st.warning("この履歴を削除しますか？（元に戻せません）")
-                    dc1, dc2 = st.columns([1, 1])
-                    with dc1:
-                        if st.button("削除する", key=f"confirm_delete_yes_{item_id}"):
-                            try:
-                                delete_history_item(item_id)
-                                st.session_state.confirm_action = None
-                                st.success("削除しました")
-                                st.rerun()
-                            except Exception as e:
-                                st.error(f"削除に失敗しました: {e}")
-                    with dc2:
-                        if st.button("キャンセル", key=f"confirm_delete_no_{item_id}"):
-                            st.session_state.confirm_action = None
-                            st.rerun()
