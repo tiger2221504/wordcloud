@@ -10,7 +10,7 @@ from janome.tokenizer import Tokenizer
 from wordcloud import WordCloud
 import matplotlib.pyplot as plt
 from streamlit_cookies_manager import EncryptedCookieManager
-import streamlit.components.v1 as components
+
 
 # =========================================================
 #ページコンフィグ
@@ -149,144 +149,125 @@ def make_default_name(history) -> str:
 
 
 # =========================================================
-# クエリパラメータ（HTMLポップアップ結果の受け渡し）ヘルパー
+# モーダル（Streamlit dialog）管理
 # =========================================================
-def _get_qp(key: str):
-    if hasattr(st, "query_params"):
-        v = st.query_params.get(key)
-        if isinstance(v, list):
-            return v[0] if v else None
-        return v
-    else:
-        v = st.experimental_get_query_params().get(key)
-        return v[0] if v else None
+st.session_state.setdefault("modal", None)  # {"type": "rename/delete/reset", "id": "..."} など
 
-
-def _set_qp(**kwargs):
-    if hasattr(st, "query_params"):
-        st.query_params.clear()
-        for k, v in kwargs.items():
-            if v is not None:
-                st.query_params[k] = str(v)
-    else:
-        st.experimental_set_query_params(**{k: v for k, v in kwargs.items() if v is not None})
-
-
-def _clear_qp():
-    if hasattr(st, "query_params"):
-        st.query_params.clear()
-    else:
-        st.experimental_set_query_params()
-
-
-
-# =========================================================
-# HTML(JS)ポップアップ（prompt/confirm）
-# =========================================================
-def show_rename_popup(item_id: str, current_name: str):
-    html = f"""
-<script>
-(() => {{
-  const parentWin = window.parent;
-  const itemId = {json.dumps(item_id)};
-  const currentName = {json.dumps(current_name)};
-
-  const newName = parentWin.prompt("保存名を編集", currentName);
-
-  const u = new URL(parentWin.location.href);
-  u.searchParams.delete("action");
-  u.searchParams.delete("id");
-  u.searchParams.delete("name");
-
-  if (newName === null) {{
-    parentWin.location.replace(u.toString());
-    return;
-  }}
-
-  const trimmed = newName.trim();
-  if (!trimmed) {{
-    parentWin.location.replace(u.toString());
-    return;
-  }}
-
-  u.searchParams.set("action", "rename_apply");
-  u.searchParams.set("id", itemId);
-  u.searchParams.set("name", trimmed);
-  parentWin.location.replace(u.toString());
-}})();
-</script>
-"""
-    components.html(html, height=0)
-
-
-def show_delete_confirm(item_id: str):
-    html = f"""
-<script>
-(() => {{
-  const parentWin = window.parent;
-  const itemId = {json.dumps(item_id)};
-  const ok = parentWin.confirm("この保存設定を削除しますか？（元に戻せません）");
-
-  const u = new URL(parentWin.location.href);
-  u.searchParams.delete("action");
-  u.searchParams.delete("id");
-
-  if (!ok) {{
-    parentWin.location.replace(u.toString());
-    return;
-  }}
-
-  u.searchParams.set("action", "delete_apply");
-  u.searchParams.set("id", itemId);
-  parentWin.location.replace(u.toString());
-}})();
-</script>
-"""
-    components.html(html, height=0)
-
-
-
-# =========================================================
-# 先にアクション処理（rename/delete）
-# =========================================================
-action = _get_qp("action")
-target_id = _get_qp("id")
-
-if action == "rename_apply" and target_id:
-    new_name = _get_qp("name") or ""
-    new_name = new_name.strip()
-    if new_name:
-        try:
-            rename_history_item(target_id, new_name)
-            st.session_state["flash"] = "保存名を更新しました"
-        except Exception as e:
-            st.session_state["flash"] = f"保存名の更新に失敗しました: {e}"
-    _clear_qp()
+def open_modal(modal_type: str, item_id: str | None = None):
+    st.session_state["modal"] = {"type": modal_type, "id": item_id}
     st.rerun()
 
-if action == "delete_apply" and target_id:
-    try:
-        delete_history_item(target_id)
-        st.session_state["flash"] = "削除しました"
-    except Exception as e:
-        st.session_state["flash"] = f"削除に失敗しました: {e}"
-    _clear_qp()
+def close_modal(message: str | None = None):
+    st.session_state["modal"] = None
+    if message:
+        st.session_state["flash"] = message
     st.rerun()
 
-if action == "rename_popup" and target_id:
-    # 現在名を取って prompt の初期値にする
-    history = load_history()
-    item = next((x for x in history if x.get("id") == target_id), None)
-    if item:
-        show_rename_popup(target_id, item.get("name", ""))
-        st.stop()
-    else:
-        _clear_qp()
-        st.rerun()
 
-if action == "delete_popup" and target_id:
-    show_delete_confirm(target_id)
-    st.stop()
+# Streamlitがst.dialogを持っている場合は本物のポップアップにする
+if hasattr(st, "dialog"):
+
+    @st.dialog("保存名を編集")
+    def rename_dialog(item_id: str, current_name: str):
+        new_name = st.text_input("保存名", value=current_name)
+        c1, c2 = st.columns([1, 1])
+        with c1:
+            if st.button("保存"):
+                nn = (new_name or "").strip()
+                if nn:
+                    try:
+                        rename_history_item(item_id, nn)
+                        close_modal("保存名を更新しました")
+                    except Exception as e:
+                        close_modal(f"保存名の更新に失敗しました: {e}")
+                else:
+                    st.warning("空の名前は保存できません。")
+        with c2:
+            if st.button("キャンセル"):
+                close_modal()
+
+    @st.dialog("削除の確認")
+    def delete_dialog(item_id: str, name: str):
+        st.write(f"**「{name}」** を削除しますか？（元に戻せません）")
+        c1, c2 = st.columns([1, 1])
+        with c1:
+            if st.button("削除する"):
+                try:
+                    delete_history_item(item_id)
+                    close_modal("削除しました")
+                except Exception as e:
+                    close_modal(f"削除に失敗しました: {e}")
+        with c2:
+            if st.button("キャンセル"):
+                close_modal()
+
+    @st.dialog("リセットの確認")
+    def reset_dialog():
+        st.write("保存した設定を **すべてリセット** しますか？（元に戻せません）")
+        c1, c2 = st.columns([1, 1])
+        with c1:
+            if st.button("リセットする"):
+                try:
+                    reset_history()
+                    close_modal("保存をリセットしました")
+                except Exception as e:
+                    close_modal(f"リセットに失敗しました: {e}")
+        with c2:
+            if st.button("キャンセル"):
+                close_modal()
+
+else:
+    # st.dialogが無い環境向けのフォールバック
+    def rename_dialog(item_id: str, current_name: str):
+        st.warning("この環境では st.dialog が使えないため、画面内で編集します。")
+        new_name = st.text_input("保存名", value=current_name)
+        if st.button("保存"):
+            nn = (new_name or "").strip()
+            if nn:
+                rename_history_item(item_id, nn)
+                close_modal("保存名を更新しました")
+        if st.button("キャンセル"):
+            close_modal()
+
+    def delete_dialog(item_id: str, name: str):
+        st.warning("この環境では st.dialog が使えないため、画面内で確認します。")
+        st.write(f"**「{name}」** を削除しますか？")
+        if st.button("削除する"):
+            delete_history_item(item_id)
+            close_modal("削除しました")
+        if st.button("キャンセル"):
+            close_modal()
+
+    def reset_dialog():
+        st.warning("この環境では st.dialog が使えないため、画面内で確認します。")
+        if st.button("リセットする"):
+            reset_history()
+            close_modal("保存をリセットしました")
+        if st.button("キャンセル"):
+            close_modal()
+
+
+# モーダルを表示
+modal = st.session_state.get("modal")
+if modal:
+    history_for_modal = load_history()
+    t = modal.get("type")
+    mid = modal.get("id")
+
+    if t == "rename" and mid:
+        item = next((x for x in history_for_modal if x.get("id") == mid), None)
+        if item:
+            rename_dialog(mid, item.get("name", ""))
+        else:
+            close_modal()
+    elif t == "delete" and mid:
+        item = next((x for x in history_for_modal if x.get("id") == mid), None)
+        if item:
+            delete_dialog(mid, item.get("name", "（無名）"))
+        else:
+            close_modal()
+    elif t == "reset":
+        reset_dialog()
 
 
 
@@ -409,6 +390,11 @@ def render_wordcloud_to_png_bytes(wordcloud):
 
 # Streamlitアプリのタイトル
 st.title("ワードクラウドジェネレーター☁️")
+
+# flashを1回だけ表示（毎回出るのを防ぐ）
+if st.session_state.get("flash"):
+    st.success(st.session_state["flash"])
+    st.session_state["flash"] = None
 
 # ユーザーからのテキスト入力
 user_input = st.text_area(
@@ -633,35 +619,7 @@ with st.expander("保存した設定", expanded=False):
 
     # リセット（最終確認をHTML confirm にする）
     if st.button("履歴のリセット", type="secondary"):
-        # HTML confirm を使うため、delete_popup と同じ要領で query params を使う
-        _set_qp(action="reset_popup")
-        st.rerun()
-
-    # reset_popup を処理（confirm）
-    if _get_qp("action") == "reset_popup":
-        html = """
-<script>
-(() => {
-  const ok = window.confirm("保存した設定をすべてリセットしますか？（元に戻せません）");
-  const u = new URL(window.location.href);
-  u.searchParams.delete("action");
-  if (ok) {
-    u.searchParams.set("action", "reset_apply");
-  }
-  window.location.replace(u.toString());
-})();
-</script>
-"""
-        components.html(html, height=0)
-
-    if _get_qp("action") == "reset_apply":
-        try:
-            reset_history()
-            st.session_state["flash"] = "保存をリセットしました"
-        except Exception as e:
-            st.session_state["flash"] = f"リセットに失敗しました: {e}"
-        _clear_qp()
-        st.rerun()
+        open_modal("reset")
 
     if not history:
         st.caption("保存履歴はまだありません。")
@@ -704,10 +662,8 @@ with st.expander("保存した設定", expanded=False):
 
                 with b2:
                     if st.button("名前を編集", key=f"rename_{item_id}"):
-                        _set_qp(action="rename_popup", id=item_id)
-                        st.rerun()
+                        open_modal("rename", item_id)
 
                 with b3:
                     if st.button("削除", key=f"delete_{item_id}"):
-                        _set_qp(action="delete_popup", id=item_id)
-                        st.rerun()
+                        open_modal("delete", item_id)
