@@ -194,7 +194,6 @@ def show_rename_popup(item_id: str, current_name: str):
   const newName = parentWin.prompt("保存名を編集", currentName);
 
   const u = new URL(parentWin.location.href);
-  // 必要なキーだけ消す（u.search="" だと他のクエリも消えるので安全寄り）
   u.searchParams.delete("action");
   u.searchParams.delete("id");
   u.searchParams.delete("name");
@@ -217,7 +216,7 @@ def show_rename_popup(item_id: str, current_name: str):
 }})();
 </script>
 """
-    components.html(html, height=0, key=f"rename_popup_{item_id}")
+    components.html(html, height=0)
 
 
 def show_delete_confirm(item_id: str):
@@ -243,7 +242,7 @@ def show_delete_confirm(item_id: str):
 }})();
 </script>
 """
-    components.html(html, height=0, key=f"delete_popup_{item_id}")
+    components.html(html, height=0)
 
 
 
@@ -571,7 +570,7 @@ else:
                 st.session_state.last_png = png_bytes
 
                 # 保存用に設定を保持
-                st.session_state.last_config = {
+                st.session_state.last_settings = {
                     "priority_nouns_input": priority_nouns_input,
                     "exclude_input": exclude_input,
                     "selected_pos": list(selected_pos),
@@ -590,7 +589,7 @@ else:
                 st.error(f"エラーが発生しました: {e}")
 
     # 画像生成後だけ表示
-    if st.session_state.get("last_png") and st.session_state.get("last_config"):
+    if st.session_state.get("last_png") and st.session_state.get("last_settings"):
         c1, c2 = st.columns([1, 1])
 
         with c1:
@@ -611,7 +610,7 @@ else:
                         "id": str(uuid.uuid4()),
                         "created_at": _now_iso_jst(),
                         "name": default_name,
-                        "settings": st.session_state["last_settings"],  # ★ 設定のみ
+                        "settings": st.session_state["last_settings"],
                     }
                     history.append(item)
                     history = history[-MAX_HISTORY:]
