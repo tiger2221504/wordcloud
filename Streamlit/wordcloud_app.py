@@ -184,63 +184,66 @@ def _clear_qp():
 # HTML(JS)ポップアップ（prompt/confirm）
 # =========================================================
 def show_rename_popup(item_id: str, current_name: str):
-    # promptで入力 → action=rename_apply に遷移
     html = f"""
 <script>
 (() => {{
+  const parentWin = window.parent;
   const itemId = {json.dumps(item_id)};
   const currentName = {json.dumps(current_name)};
-  const newName = window.prompt("保存名を編集", currentName);
 
-  const u = new URL(window.location.href);
+  const newName = parentWin.prompt("保存名を編集", currentName);
+
+  const u = new URL(parentWin.location.href);
+  // 必要なキーだけ消す（u.search="" だと他のクエリも消えるので安全寄り）
+  u.searchParams.delete("action");
+  u.searchParams.delete("id");
+  u.searchParams.delete("name");
+
   if (newName === null) {{
-    // キャンセル：クエリ消して戻る
-    u.search = "";
-    window.location.replace(u.toString());
+    parentWin.location.replace(u.toString());
     return;
   }}
 
   const trimmed = newName.trim();
   if (!trimmed) {{
-    // 空なら変更なし（戻る）
-    u.search = "";
-    window.location.replace(u.toString());
+    parentWin.location.replace(u.toString());
     return;
   }}
 
   u.searchParams.set("action", "rename_apply");
   u.searchParams.set("id", itemId);
   u.searchParams.set("name", trimmed);
-  window.location.replace(u.toString());
+  parentWin.location.replace(u.toString());
 }})();
 </script>
 """
-    components.html(html, height=0)
+    components.html(html, height=0, key=f"rename_popup_{item_id}")
 
 
 def show_delete_confirm(item_id: str):
-    # confirmで最終確認 → action=delete_apply に遷移
     html = f"""
 <script>
 (() => {{
+  const parentWin = window.parent;
   const itemId = {json.dumps(item_id)};
-  const ok = window.confirm("この保存設定を削除しますか？（元に戻せません）");
+  const ok = parentWin.confirm("この保存設定を削除しますか？（元に戻せません）");
 
-  const u = new URL(window.location.href);
+  const u = new URL(parentWin.location.href);
+  u.searchParams.delete("action");
+  u.searchParams.delete("id");
+
   if (!ok) {{
-    // キャンセル：クエリ消して戻る
-    u.search = "";
-    window.location.replace(u.toString());
+    parentWin.location.replace(u.toString());
     return;
   }}
 
   u.searchParams.set("action", "delete_apply");
   u.searchParams.set("id", itemId);
-  window.location.replace(u.toString());
+  parentWin.location.replace(u.toString());
 }})();
 </script>
 """
-    components.html(html, height=0)
+    components.html(html, height=0, key=f"delete_popup_{item_id}")
 
 
 
@@ -277,12 +280,14 @@ if action == "rename_popup" and target_id:
     item = next((x for x in history if x.get("id") == target_id), None)
     if item:
         show_rename_popup(target_id, item.get("name", ""))
+        st.stop()
     else:
         _clear_qp()
         st.rerun()
 
 if action == "delete_popup" and target_id:
     show_delete_confirm(target_id)
+    st.stop()
 
 
 
