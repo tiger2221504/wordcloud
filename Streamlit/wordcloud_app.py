@@ -149,125 +149,62 @@ def make_default_name(history) -> str:
 
 
 # =========================================================
-# モーダル（Streamlit dialog）管理
+# Dialogs（st.dialog がある場合だけ）
 # =========================================================
-st.session_state.setdefault("modal", None)  # {"type": "rename/delete/reset", "id": "..."} など
+HAS_DIALOG = hasattr(st, "dialog")
 
-def open_modal(modal_type: str, item_id: str | None = None):
-    st.session_state["modal"] = {"type": modal_type, "id": item_id}
-    st.rerun()
-
-def close_modal(message: str | None = None):
-    st.session_state["modal"] = None
-    if message:
-        st.session_state["flash"] = message
-    st.rerun()
-
-
-# Streamlitがst.dialogを持っている場合は本物のポップアップにする
-if hasattr(st, "dialog"):
-
+if HAS_DIALOG:
     @st.dialog("保存名を編集")
     def rename_dialog(item_id: str, current_name: str):
-        new_name = st.text_input("保存名", value=current_name)
-        c1, c2 = st.columns([1, 1])
-        with c1:
-            if st.button("保存"):
-                nn = (new_name or "").strip()
-                if nn:
-                    try:
-                        rename_history_item(item_id, nn)
-                        close_modal("保存名を更新しました")
-                    except Exception as e:
-                        close_modal(f"保存名の更新に失敗しました: {e}")
-                else:
-                    st.warning("空の名前は保存できません。")
-        with c2:
-            if st.button("キャンセル"):
-                close_modal()
+        new_name = st.text_input("保存名", value=current_name, key=f"dlg_rename_name_{item_id}")
+        c1, c2 = st.columns(2)
+
+        if c1.button("保存", key=f"dlg_rename_save_{item_id}"):
+            nn = (new_name or "").strip()
+            if not nn:
+                st.warning("空の名前は保存できません。")
+                st.stop()
+            try:
+                rename_history_item(item_id, nn)
+                st.session_state["flash"] = "保存名を更新しました"
+            except Exception as e:
+                st.session_state["flash"] = f"保存名の更新に失敗しました: {e}"
+            st.rerun()
+
+        if c2.button("キャンセル", key=f"dlg_rename_cancel_{item_id}"):
+            st.rerun()
 
     @st.dialog("削除の確認")
     def delete_dialog(item_id: str, name: str):
         st.write(f"**「{name}」** を削除しますか？（元に戻せません）")
-        c1, c2 = st.columns([1, 1])
-        with c1:
-            if st.button("削除する"):
-                try:
-                    delete_history_item(item_id)
-                    close_modal("削除しました")
-                except Exception as e:
-                    close_modal(f"削除に失敗しました: {e}")
-        with c2:
-            if st.button("キャンセル"):
-                close_modal()
+        c1, c2 = st.columns(2)
+
+        if c1.button("削除する", key=f"dlg_delete_ok_{item_id}"):
+            try:
+                delete_history_item(item_id)
+                st.session_state["flash"] = "削除しました"
+            except Exception as e:
+                st.session_state["flash"] = f"削除に失敗しました: {e}"
+            st.rerun()
+
+        if c2.button("キャンセル", key=f"dlg_delete_cancel_{item_id}"):
+            st.rerun()
 
     @st.dialog("リセットの確認")
     def reset_dialog():
         st.write("保存した設定を **すべてリセット** しますか？（元に戻せません）")
-        c1, c2 = st.columns([1, 1])
-        with c1:
-            if st.button("リセットする"):
-                try:
-                    reset_history()
-                    close_modal("保存をリセットしました")
-                except Exception as e:
-                    close_modal(f"リセットに失敗しました: {e}")
-        with c2:
-            if st.button("キャンセル"):
-                close_modal()
+        c1, c2 = st.columns(2)
 
-else:
-    # st.dialogが無い環境向けのフォールバック
-    def rename_dialog(item_id: str, current_name: str):
-        st.warning("この環境では st.dialog が使えないため、画面内で編集します。")
-        new_name = st.text_input("保存名", value=current_name)
-        if st.button("保存"):
-            nn = (new_name or "").strip()
-            if nn:
-                rename_history_item(item_id, nn)
-                close_modal("保存名を更新しました")
-        if st.button("キャンセル"):
-            close_modal()
+        if c1.button("リセットする", key="dlg_reset_ok"):
+            try:
+                reset_history()
+                st.session_state["flash"] = "保存をリセットしました"
+            except Exception as e:
+                st.session_state["flash"] = f"リセットに失敗しました: {e}"
+            st.rerun()
 
-    def delete_dialog(item_id: str, name: str):
-        st.warning("この環境では st.dialog が使えないため、画面内で確認します。")
-        st.write(f"**「{name}」** を削除しますか？")
-        if st.button("削除する"):
-            delete_history_item(item_id)
-            close_modal("削除しました")
-        if st.button("キャンセル"):
-            close_modal()
-
-    def reset_dialog():
-        st.warning("この環境では st.dialog が使えないため、画面内で確認します。")
-        if st.button("リセットする"):
-            reset_history()
-            close_modal("保存をリセットしました")
-        if st.button("キャンセル"):
-            close_modal()
-
-
-# モーダルを表示
-modal = st.session_state.get("modal")
-if modal:
-    history_for_modal = load_history()
-    t = modal.get("type")
-    mid = modal.get("id")
-
-    if t == "rename" and mid:
-        item = next((x for x in history_for_modal if x.get("id") == mid), None)
-        if item:
-            rename_dialog(mid, item.get("name", ""))
-        else:
-            close_modal()
-    elif t == "delete" and mid:
-        item = next((x for x in history_for_modal if x.get("id") == mid), None)
-        if item:
-            delete_dialog(mid, item.get("name", "（無名）"))
-        else:
-            close_modal()
-    elif t == "reset":
-        reset_dialog()
+        if c2.button("キャンセル", key="dlg_reset_cancel"):
+            st.rerun()
 
 
 
@@ -617,9 +554,15 @@ st.caption("保存した設定（ブラウザcookieに保存）")
 with st.expander("保存した設定", expanded=False):
     history = load_history()
 
-    # リセット（最終確認をHTML confirm にする）
-    if st.button("履歴のリセット", type="secondary"):
-        open_modal("reset")
+    # リセット
+    if st.button("履歴のリセット", type="secondary", key="reset_btn"):
+        if HAS_DIALOG:
+            reset_dialog()
+        else:
+            # フォールバック（dialog無いなら即リセット or 画面内確認に変えてOK）
+            reset_history()
+            st.session_state["flash"] = "保存をリセットしました"
+            st.rerun()
 
     if not history:
         st.caption("保存履歴はまだありません。")
@@ -627,19 +570,13 @@ with st.expander("保存した設定", expanded=False):
         # 新しい順に表示
         for item in reversed(history):
             item_id = item.get("id")
-            created_at = item.get("created_at", "")
             name = item.get("name", "（無名）")
+            created_at = item.get("created_at", "")
             settings = item.get("settings", {}) or {}
 
             with st.container(border=True):
                 st.markdown(f"**{name}**")
                 st.caption(f"保存日時: {created_at}")
-
-                st.caption(
-                    f"{settings.get('width','?')}×{settings.get('height','?')} / "
-                    f"max_words={settings.get('max_words','?')} / "
-                    f"min_font={settings.get('min_font_size','?')}"
-                )
 
                 b1, b2, b3 = st.columns([1, 1, 3])
 
@@ -662,8 +599,16 @@ with st.expander("保存した設定", expanded=False):
 
                 with b2:
                     if st.button("名前を編集", key=f"rename_{item_id}"):
-                        open_modal("rename", item_id)
+                        if HAS_DIALOG:
+                            rename_dialog(item_id, name)
+                        else:
+                            st.warning("この環境では使えません")
 
                 with b3:
                     if st.button("削除", key=f"delete_{item_id}"):
-                        open_modal("delete", item_id)
+                        if HAS_DIALOG:
+                            delete_dialog(item_id, name)
+                        else:
+                            delete_history_item(item_id)
+                            st.session_state["flash"] = "削除しました"
+                            st.rerun()
