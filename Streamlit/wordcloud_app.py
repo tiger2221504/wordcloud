@@ -534,7 +534,7 @@ else:
                     collocations=collocations, 
                     min_font_size=min_font_size, 
                     colormap=colormap,
-                    is_horizontal_only
+                    is_horizontal_only=is_horizontal_only,
                 )
 
                 png_bytes = render_wordcloud_to_png_bytes(wordcloud)
