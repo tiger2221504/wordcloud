@@ -332,8 +332,9 @@ def generate_wordcloud(
     collocations=False,
     min_font_size=10,
     colormap=None,
+    is_horizontal_only=True,
 ):
-    horizontal = 1.0 if collocations else 0.5
+    horizontal = 1.0 if is_horizontal_only else 0.5
     words = tokenize_japanese(text, selected_pos, exclude_words, priority_nouns)
 
     # デバッグ用出力
@@ -463,12 +464,15 @@ height = st.number_input(
     key="wc_height"
 )
 
-# 横書きのみ
-collocations = st.checkbox(
+# 横書きの制御
+is_horizontal_only = st.checkbox(
     "横書きのみ",
     value=True,
-    key="wc_collocations"
+    key="wc_horizontal_only"
 )
+
+# 内部的にはcollocationsは常にFalseに設定（重複防止）
+collocations = False
 
 # 背景色の選択
 background_color = st.color_picker(
@@ -530,6 +534,7 @@ else:
                     collocations=collocations, 
                     min_font_size=min_font_size, 
                     colormap=colormap,
+                    is_horizontal_only
                 )
 
                 png_bytes = render_wordcloud_to_png_bytes(wordcloud)
