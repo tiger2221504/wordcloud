@@ -345,7 +345,7 @@ def generate_wordcloud(
     # デバッグ用出力
     print("トークナイズ後の単語列:", words)
 
-     color_func = None
+    color_func = None
 
     if check_contrast:
          # --- コントラスト調整用のカラー関数定義 ---
