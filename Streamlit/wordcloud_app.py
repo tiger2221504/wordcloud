@@ -386,7 +386,7 @@ def generate_wordcloud(
         max_words=max_words,
         min_font_size=min_font_size,
         collocations=collocations,
-        colormap=colormap if not color_func else None
+        colormap=colormap if not color_func else None,
         color_func=color_func,
         prefer_horizontal=horizontal,
     ).generate(words)
