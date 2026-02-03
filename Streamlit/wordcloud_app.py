@@ -438,7 +438,7 @@ max_words = st.number_input(
 min_font_size = st.number_input(
     "最小フォントサイズ",
     min_value=1,
-    max_value=2    00,
+    max_value=200,
     value=10,
     step=1,
     key="wc_min_font_size"
