@@ -8,6 +8,7 @@ from datetime import datetime, timezone, timedelta
 import streamlit as st
 from janome.tokenizer import Tokenizer
 from wordcloud import WordCloud
+import matplotlib
 import matplotlib.pyplot as plt
 from matplotlib import cm
 from streamlit_cookies_manager import EncryptedCookieManager
@@ -112,7 +113,7 @@ def save_history(history):
     if len(raw.encode("utf-8")) > 2800:
         raise ValueError(
             "保存データが大きすぎます。"
-            "（テキストを短くする／保存件数を減らす などで調整してください）"
+            "（設定数を調整してください）"
         )
 
     cookies[HISTORY_COOKIE_KEY] = raw
@@ -240,8 +241,9 @@ if pending:
     st.session_state["wc_min_font_size"] = _to_int(settings.get("min_font_size", 10), 10)
     st.session_state["wc_width"] = _to_int(settings.get("width", 800), 800)
     st.session_state["wc_height"] = _to_int(settings.get("height", 600), 600)
-    st.session_state["wc_collocations"] = bool(settings.get("collocations", True))
+    st.session_state["wc_horizontal_only"] = bool(settings.get("is_horizontal_only", True))
     st.session_state["wc_background_color"] = settings.get("background_color", "#f4f5f7")
+    st.session_state["wc_check_contrast"] = bool(settings.get("check_contrast", True))
     st.session_state["wc_colormap"] = settings.get("colormap", "viridis")
 
     st.session_state["last_png"] = None
@@ -343,11 +345,14 @@ def generate_wordcloud(
     # デバッグ用出力
     print("トークナイズ後の単語列:", words)
 
-    if is_horizontal_only:
+    if check_contrast:
          # --- コントラスト調整用のカラー関数定義 ---
          def color_func_with_contrast(word, font_size, position, orientation, random_state=None, **kwargs):
              # 1. 選択されたカラーマップを取得
-             cmap = cm.get_cmap(colormap)
+             try:
+                 cmap = matplotlib.colormaps[colormap]
+             except (KeyError, ValueError):
+                 cmap = matplotlib.colormaps["viridis"]  # エラー時のフォールバック
              
              # 2. 背景色の明るさを計算 (0:黒 ～ 255:白)
              bg_rgb = [int(background_color[i:i+2], 16) for i in (1, 3, 5)]
@@ -369,33 +374,22 @@ def generate_wordcloud(
                          return f"rgb({r}, {g}, {b})"
              # 適切な色が見つからなかった場合のフォールバック
              return f"rgb({r}, {g}, {b})"
-     
-         # --- ワードクラウドの生成 ---
-         wordcloud = WordCloud(
-             font_path=font_path,
-             width=width,
-             height=height,
-             background_color=background_color,
-             max_words=max_words,
-             min_font_size=min_font_size,
-             collocations=collocations,
-             # colormapは直接指定せず、color_funcを使う
-             color_func=color_func_with_contrast, 
-             prefer_horizontal=horizontal,
-         ).generate(words)
 
-    else:
-         wordcloud = WordCloud(
-             font_path=font_path,
-             width=width,
-             height=height,
-             background_color=background_color,
-             max_words=max_words,
-             min_font_size=min_font_size,
-             collocations=collocations,
-             colormap=colormap,
-             prefer_horizontal=horizontal,
-         ).generate(words)
+         color_func = color_func_with_contrast
+     
+    # --- ワードクラウドの生成 ---
+    wordcloud = WordCloud(
+        font_path=font_path,
+        width=width,
+        height=height,
+        background_color=background_color,
+        max_words=max_words,
+        min_font_size=min_font_size,
+        collocations=collocations,
+        colormap=colormap if not color_func else None
+        color_func=color_func,
+        prefer_horizontal=horizontal,
+    ).generate(words)
 
     return wordcloud
 
@@ -524,7 +518,7 @@ background_color = st.color_picker(
     key="wc_background_color"
 )
 
-# 横書きの制御
+# 視認性が低い色をスキップ
 check_contrast = st.checkbox(
     "視認性が低い色をスキップ",
     value=True,
@@ -605,16 +599,17 @@ else:
 
                 # 保存用に設定を保持
                 st.session_state.last_settings = {
-                    "priority_nouns_input": priority_nouns_input,
-                    "exclude_input": exclude_input,
-                    "selected_pos": list(selected_pos),
-                    "max_words": int(max_words),
-                    "min_font_size": int(min_font_size),
-                    "width": int(width),
-                    "height": int(height),
-                    "collocations": bool(collocations),
-                    "background_color": background_color,
-                    "colormap": colormap,
+                    "priority_nouns_input": priority_nouns_input, # オリジナル名詞
+                    "exclude_input": exclude_input, # 除外する単語
+                    "selected_pos": list(selected_pos), # 含める品詞
+                    "max_words": int(max_words), # 表示する最大単語数
+                    "min_font_size": int(min_font_size), # 最小フォントサイズ
+                    "width": int(width), # 幅
+                    "height": int(height), # 高さ
+                    "is_horizontal_only": bool(is_horizontal_only), # 横書きのみ
+                    "background_color": background_color, # 背景色
+                    "check_contrast": bool(check_contrast), # コントラスト調整
+                    "colormap": colormap, # カラーマップ
                 }
 
                 st.image(png_bytes)
