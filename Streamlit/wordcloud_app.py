@@ -9,7 +9,9 @@ import streamlit as st
 from janome.tokenizer import Tokenizer
 from wordcloud import WordCloud
 import matplotlib.pyplot as plt
+from matplotlib import cm
 from streamlit_cookies_manager import EncryptedCookieManager
+import numpy as np
 
 
 # =========================================================
@@ -333,6 +335,7 @@ def generate_wordcloud(
     min_font_size=10,
     colormap=None,
     is_horizontal_only=True,
+    check_contrast=True
 ):
     horizontal = 1.0 if is_horizontal_only else 0.5
     words = tokenize_japanese(text, selected_pos, exclude_words, priority_nouns)
@@ -340,17 +343,59 @@ def generate_wordcloud(
     # デバッグ用出力
     print("トークナイズ後の単語列:", words)
 
-    wordcloud = WordCloud(
-        font_path=font_path,
-        width=width,
-        height=height,
-        background_color=background_color,
-        max_words=max_words,
-        min_font_size=min_font_size,
-        collocations=collocations,
-        colormap=colormap,
-        prefer_horizontal=horizontal,
-    ).generate(words)
+    if is_horizontal_only:
+         # --- コントラスト調整用のカラー関数定義 ---
+         def color_func_with_contrast(word, font_size, position, orientation, random_state=None, **kwargs):
+             # 1. 選択されたカラーマップを取得
+             cmap = cm.get_cmap(colormap)
+             
+             # 2. 背景色の明るさを計算 (0:黒 ～ 255:白)
+             bg_rgb = [int(background_color[i:i+2], 16) for i in (1, 3, 5)]
+             bg_luminance = (0.299 * bg_rgb[0] + 0.587 * bg_rgb[1] + 0.114 * bg_rgb[2])
+             
+             # 3. 背景色と被らない色が見つかるまで試行
+             for _ in range(10):  # 無限ループ防止のため最大10回
+                 color = cmap(np.random.uniform(0, 1))
+                 # RGB (0-1) を 0-255 に変換
+                 r, g, b = [int(c * 255) for c in color[:3]]
+                 word_luminance = (0.299 * r + 0.587 * g + 0.114 * b)
+                 # 背景が明るい場合：明るすぎる文字色(輝度180以上)を避ける
+                 if bg_luminance > 128:
+                     if word_luminance < 180: 
+                         return f"rgb({r}, {g}, {b})"
+                 # 背景が暗い場合：暗すぎる文字色(輝度80以下)を避ける
+                 else:
+                     if word_luminance > 80:
+                         return f"rgb({r}, {g}, {b})"
+             # 適切な色が見つからなかった場合のフォールバック
+             return f"rgb({r}, {g}, {b})"
+     
+         # --- ワードクラウドの生成 ---
+         wordcloud = WordCloud(
+             font_path=font_path,
+             width=width,
+             height=height,
+             background_color=background_color,
+             max_words=max_words,
+             min_font_size=min_font_size,
+             collocations=collocations,
+             # colormapは直接指定せず、color_funcを使う
+             color_func=color_func_with_contrast, 
+             prefer_horizontal=horizontal,
+         ).generate(words)
+
+    else:
+         wordcloud = WordCloud(
+             font_path=font_path,
+             width=width,
+             height=height,
+             background_color=background_color,
+             max_words=max_words,
+             min_font_size=min_font_size,
+             collocations=collocations,
+             colormap=colormap,
+             prefer_horizontal=horizontal,
+         ).generate(words)
 
     return wordcloud
 
@@ -470,7 +515,6 @@ is_horizontal_only = st.checkbox(
     value=True,
     key="wc_horizontal_only"
 )
-
 # 内部的にはcollocationsは常にFalseに設定（重複防止）
 collocations = False
 
@@ -478,6 +522,13 @@ collocations = False
 background_color = st.color_picker(
     "背景色を選択", "#f4f5f7",
     key="wc_background_color"
+)
+
+# 横書きの制御
+check_contrast = st.checkbox(
+    "視認性が低い色をスキップ",
+    value=True,
+    key="wc_check_contrast"
 )
 
 # カラーマップの選択
@@ -546,6 +597,7 @@ else:
                     min_font_size=min_font_size, 
                     colormap=colormap,
                     is_horizontal_only=is_horizontal_only,
+                    check_contrast=check_contrast,
                 )
 
                 png_bytes = render_wordcloud_to_png_bytes(wordcloud)
